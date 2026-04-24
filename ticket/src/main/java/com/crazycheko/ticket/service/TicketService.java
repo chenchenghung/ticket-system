@@ -23,6 +23,28 @@ public class TicketService {
     private final DefaultRedisScript<Long> buyTicketScript;
     private final OrderRepository orderRepository;
 
+
+    /**
+     * 初始化活动票数
+     */
+    public void initEvent(String eventId, int totalTickets) {
+        String key = getTicketKey(eventId);
+        Boolean set = redisTemplate.opsForValue().setIfAbsent(key, totalTickets);
+        if (Boolean.TRUE.equals(set)) {
+            log.info("初始化活动 {}，票数 {}", eventId, totalTickets);
+        } else {
+            log.info("活动 {} 已存在，当前票数 {}", eventId, redisTemplate.opsForValue().get(key));
+        }
+    }
+
+    /**
+     * 获取剩余票数
+     */
+    public int getRemainingTickets(String eventId) {
+        Object value = redisTemplate.opsForValue().get(getTicketKey(eventId));
+        return value == null ? 0 : Integer.parseInt(value.toString());
+    }
+
     /**
      * 购票（同步扣票 + 异步写库）
      */
