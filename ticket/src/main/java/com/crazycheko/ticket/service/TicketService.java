@@ -1,6 +1,6 @@
 package com.crazycheko.ticket.service;
 
-import com.crazycheko.ticket.bean.Order;
+import com.crazycheko.ticket.entity.Order;
 import com.crazycheko.ticket.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

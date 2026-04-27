@@ -1,4 +1,4 @@
-package com.crazycheko.ticket.bean;
+package com.crazycheko.ticket.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -9,10 +9,12 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
+@Entity
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Table(name = "orders")
 public class Order {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

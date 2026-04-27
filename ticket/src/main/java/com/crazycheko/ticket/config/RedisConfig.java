@@ -1,5 +1,6 @@
 package com.crazycheko.ticket.config;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -11,21 +12,45 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 @Configuration
 public class RedisConfig {
 
+
+//    @Bean
+//    @ConditionalOnMissingBean(name = "redisTemplate")
+//    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+//        RedisTemplate<String, Object> template = new RedisTemplate<>();
+//        template.setConnectionFactory(connectionFactory);
+//
+//        // Key 使用 String 序列化
+//        template.setKeySerializer(new StringRedisSerializer());
+//        template.setHashKeySerializer(new StringRedisSerializer());
+//
+//        // Value 使用 JSON 序列化
+//        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+//        template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
+//
+//        template.afterPropertiesSet();
+//        return template;
+//    }
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
-        RedisTemplate<String, Object> template = new RedisTemplate<>();
-        template.setConnectionFactory(connectionFactory);
+        System.out.println("================= 开始创建 redisTemplate Bean =================");
+        System.out.println("connectionFactory: " + connectionFactory);
 
-        // Key 使用 String 序列化
-        template.setKeySerializer(new StringRedisSerializer());
-        template.setHashKeySerializer(new StringRedisSerializer());
+        try {
+            RedisTemplate<String, Object> template = new RedisTemplate<>();
+            template.setConnectionFactory(connectionFactory);
+            template.setKeySerializer(new StringRedisSerializer());
+            template.setHashKeySerializer(new StringRedisSerializer());
+            template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+            template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
+            template.afterPropertiesSet();
 
-        // Value 使用 JSON 序列化
-        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
-        template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
-
-        template.afterPropertiesSet();
-        return template;
+            System.out.println("================= redisTemplate Bean 创建成功 =================");
+            return template;
+        } catch (Exception e) {
+            System.err.println("================= redisTemplate Bean 创建失败: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
     }
 
     @Bean

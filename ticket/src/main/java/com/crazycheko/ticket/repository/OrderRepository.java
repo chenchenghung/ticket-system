@@ -1,6 +1,6 @@
 package com.crazycheko.ticket.repository;
 
-import com.crazycheko.ticket.bean.Order;
+import com.crazycheko.ticket.entity.Order;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
