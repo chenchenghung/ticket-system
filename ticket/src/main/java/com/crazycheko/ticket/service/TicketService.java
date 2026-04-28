@@ -1,16 +1,18 @@
 package com.crazycheko.ticket.service;
 
+import com.crazycheko.ticket.config.RabbitMQConfig;
+import com.crazycheko.ticket.dto.OrderMessage;
 import com.crazycheko.ticket.entity.Order;
 import com.crazycheko.ticket.repository.OrderRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,6 +24,8 @@ public class TicketService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final DefaultRedisScript<Long> buyTicketScript;
     private final OrderRepository orderRepository;
+    private final RabbitTemplate rabbitTemplate;
+    private final ObjectMapper objectMapper;
 
 
     /**
@@ -60,13 +64,35 @@ public class TicketService {
 
         if (result >= 0) {
             // 2. 购票成功，异步写入数据库（不阻塞响应）
-            saveOrderAsync(orderNo, eventId, userId, quantity, Order.OrderStatus.SUCCESS);
-//            log.info("✅ 用户 {} 购票成功，订单号: {}", userId, orderNo);
+//            saveOrderAsync(orderNo, eventId, userId, quantity, Order.OrderStatus.SUCCESS);
+
+            // 发送到 RabbitMQ（两种方式都可以）
+            // 方式1：直接发送对象（自动序列化）
+            OrderMessage orderMsg = new OrderMessage(orderNo, eventId, userId, quantity, Order.OrderStatus.SUCCESS);
+            String jsonMsg = null;
+            try{
+                jsonMsg = objectMapper.writeValueAsString(orderMsg);
+            }catch (JsonProcessingException e){
+                log.error("❌ 订单消息序列化失败，订单号: {}, 错误: {}", orderNo, e.getMessage(), e);
+
+                // 重要：回滚 Redis 操作，因为消息没发出去
+                rollbackRedis(eventId, userId, quantity);
+
+                return BuyResult.fail("系统错误，请重试");
+            }
+
+            rabbitTemplate.convertAndSend(RabbitMQConfig.ORDER_QUEUE_NAME, jsonMsg);
+
+
+            // 方式2：转为 JSON 字符串发送（更可控，推荐）
+            // String jsonMessage = objectMapper.writeValueAsString(orderMessage);
+            // rabbitTemplate.convertAndSend(RabbitMQConfig.ORDER_QUEUE_NAME, jsonMessage);
+            log.info("✅ 用户 {} 购票成功，订单号: {}", userId, orderNo);
             return BuyResult.success(result.intValue(), orderNo);
         }
 
         // 3. 购票失败，异步记录失败日志
-        saveOrderAsync(orderNo, eventId, userId, quantity, Order.OrderStatus.FAILED);
+//        saveOrderAsync(orderNo, eventId, userId, quantity, Order.OrderStatus.FAILED);
 
         switch (result.intValue()) {
             case -1:
@@ -80,28 +106,30 @@ public class TicketService {
         }
     }
 
-    /**
-     * 异步写入数据库
-     */
-    @Async
-    @Transactional
-    public void saveOrderAsync(String orderNo, String eventId, String userId, int quantity, Order.OrderStatus status) {
-        try {
-            Order order = Order.builder()
-                    .orderNo(orderNo)
-                    .eventId(eventId)
-                    .userId(userId)
-                    .quantity(quantity)
-                    .status(status)
-                    .createdAt(LocalDateTime.now())
-                    .build();
-            orderRepository.save(order);
+//    /**
+//     * 异步写入数据库
+//     */
+//    @Async
+//    @Transactional
+//    public void saveOrderAsync(String orderNo, String eventId, String userId, int quantity, Order.OrderStatus status) {
+//        try {
+//            Order order = Order.builder()
+//                    .orderNo(orderNo)
+//                    .eventId(eventId)
+//                    .userId(userId)
+//                    .quantity(quantity)
+//                    .status(status)
+//                    .createdAt(LocalDateTime.now())
+//                    .build();
+//            orderRepository.save(order);
 //            log.debug("订单已保存: {}", orderNo);
-        } catch (Exception e) {
+//        } catch (Exception e) {
 //            log.error("保存订单失败: {}", orderNo, e);
-            // 可以写入死信队列或告警
-        }
-    }
+//            // 可以写入死信队列或告警
+//        }
+//    }
+
+
 
     /**
      * 查询用户订单（从 DB 读）
@@ -136,5 +164,29 @@ public class TicketService {
         public static BuyResult fail(String message) {
             return new BuyResult(false, message, 0, null);
         }
+    }
+
+    private void rollbackRedis(String eventId, String userId, int quantity) {
+        try {
+            // 回滚票数
+            String ticketKey = getTicketKey(eventId);
+            String userKey = getUserKey(eventId, userId);
+
+            redisTemplate.opsForValue().increment(ticketKey, quantity);
+            redisTemplate.opsForValue().decrement(userKey, quantity);
+
+            log.info("✅ Redis 回滚成功，事件: {}, 用户: {}, 数量: {}", eventId, userId, quantity);
+        } catch (Exception e) {
+            log.error("❌ Redis 回滚失败，需要人工介入！事件: {}, 用户: {}, 数量: {}",
+                    eventId, userId, quantity, e);
+            // 发送告警
+            sendAlertToAdmin(eventId, userId, quantity);
+        }
+
+    }
+
+    private void sendAlertToAdmin(String eventId, String userId, int quantity) {
+        // 实现告警逻辑，例如发送邮件、钉钉通知等
+        log.error("🚨 告警：Redis 回滚失败，需要人工处理！事件: {}, 用户: {}, 数量: {}", eventId, userId, quantity);
     }
 }
