@@ -69,19 +69,19 @@ public class TicketService {
             // 发送到 RabbitMQ（两种方式都可以）
             // 方式1：直接发送对象（自动序列化）
             OrderMessage orderMsg = new OrderMessage(orderNo, eventId, userId, quantity, Order.OrderStatus.SUCCESS);
-            String jsonMsg = null;
-            try{
-                jsonMsg = objectMapper.writeValueAsString(orderMsg);
-            }catch (JsonProcessingException e){
-                log.error("❌ 订单消息序列化失败，订单号: {}, 错误: {}", orderNo, e.getMessage(), e);
+//            String jsonMsg = null;
+//            try{
+//                jsonMsg = objectMapper.writeValueAsString(orderMsg);
+//            }catch (JsonProcessingException e){
+//                log.error("❌ 订单消息序列化失败，订单号: {}, 错误: {}", orderNo, e.getMessage(), e);
+//
+//                // 重要：回滚 Redis 操作，因为消息没发出去
+//                rollbackRedis(eventId, userId, quantity);
+//
+//                return BuyResult.fail("系统错误，请重试");
+//            }
 
-                // 重要：回滚 Redis 操作，因为消息没发出去
-                rollbackRedis(eventId, userId, quantity);
-
-                return BuyResult.fail("系统错误，请重试");
-            }
-
-            rabbitTemplate.convertAndSend(RabbitMQConfig.ORDER_QUEUE_NAME, jsonMsg);
+            rabbitTemplate.convertAndSend(RabbitMQConfig.ORDER_QUEUE_NAME, orderMsg);
 
 
             // 方式2：转为 JSON 字符串发送（更可控，推荐）
