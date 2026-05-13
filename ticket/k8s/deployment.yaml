@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticket-system
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ticket-system
+  template:
+    metadata:
+      labels:
+        app: ticket-system
+    spec:
+      containers:
+        - name: app
+          image: chenchenghung/ticket-system:latest  # CI/CD updates this
+          ports:
+            - containerPort: 8080

@@ -60,4 +60,13 @@ public class TicketController {
     }
 
     public record BuyRequest(String eventId, String userId, int quantity, int maxPerUser) {}
+
+
+    @GetMapping("/test")
+    public ResponseEntity<?> test() {
+
+        return ResponseEntity.ok(Map.of(
+                "test", "goodjob"
+        ));
+    }
 }
