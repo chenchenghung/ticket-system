@@ -23,7 +23,6 @@ jobs:
           cache: maven
 
       - name: Build with Maven
-        working-directory: ticket
         run:  mvn clean package -DskipTests
 
       - name: Log in to Docker Hub
