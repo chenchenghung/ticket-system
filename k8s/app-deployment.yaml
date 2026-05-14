@@ -1,0 +1,197 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ticket-app-config
+data:
+  application.yml: |
+    spring:
+      application:
+        name: ticket-system
+    
+      rabbitmq:
+        host: rabbitmq-service
+        port: 5672
+        username: admin
+        password: "123456"
+        virtual-host: /
+    
+      amqp:
+        deserialization:
+          trust:
+            all: true
+    
+      data:
+        redis:
+          host: redis-service
+          port: 6379
+          timeout: 2000ms
+          lettuce:
+            pool:
+              max-active: 20
+              max-idle: 10
+    
+      datasource:
+        url: jdbc:postgresql://postgres-service:5432/ticket_db
+        username: postgres
+        password: password
+        hikari:
+          maximum-pool-size: 10
+    
+      jpa:
+        hibernate:
+          ddl-auto: update
+        show-sql: false
+        properties:
+          hibernate:
+            dialect: org.hibernate.dialect.PostgreSQLDialect
+    
+    server:
+      port: 8080
+      shutdown: graceful
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-conf
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+    
+        location / {
+            proxy_pass http://localhost:8080;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+            root /usr/share/nginx/html;
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticket-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ticket-app
+  template:
+    metadata:
+      labels:
+        app: ticket-app
+    spec:
+      # ADD THIS SECTION
+      initContainers:
+        - name: wait-for-dependencies
+          image: busybox:1.28
+          command: [ 'sh', '-c',
+            'for svc in postgres-service redis-service rabbitmq-service; do
+                   echo "Checking $svc..."
+                   until nslookup $svc; do
+                     echo "Waiting for $svc...";
+                     sleep 2;
+                   done;
+                   echo "$svc is ready";
+                 done' ]
+
+      containers:
+        # Sidecar nginx
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+
+        # Spring Boot App
+        - name: app
+          image: chenchenghung/ticket-system:latest  # Change this!
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: app-config
+              mountPath: /config/application.yml
+              subPath: application.yml
+          env:
+            - name: SPRING_CONFIG_LOCATION
+              value: file:/config/application.yml
+            - name: JAVA_OPTS
+              value: "-Xmx512m -Xms256m"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 20
+
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-conf
+        - name: app-config
+          configMap:
+            name: ticket-app-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ticket-app-service
+spec:
+  selector:
+    app: ticket-app
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ticket-app-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: ticket.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ticket-app-service
+                port:
+                  number: 80

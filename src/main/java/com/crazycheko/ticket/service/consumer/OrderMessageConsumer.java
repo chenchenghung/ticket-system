@@ -6,7 +6,10 @@ import com.crazycheko.ticket.entity.Order;
 import com.crazycheko.ticket.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +22,7 @@ public class OrderMessageConsumer {
 
     private final OrderRepository orderRepository;
 
-
+    @Retryable(value = {AmqpException.class}, maxAttempts = 3, backoff = @Backoff(delay = 5000))
     @RabbitListener(queues = RabbitMQConfig.ORDER_QUEUE_NAME)
     @Transactional
     public void handleOrderMessage(OrderMessage orderMessage){

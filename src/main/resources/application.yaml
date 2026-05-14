@@ -8,6 +8,7 @@ spring:
     username: admin
     password: 123456
     virtual-host: /
+    connection-timeout: 30000  # Wait 30 seconds
   amqp:
     deserialization:
       trust:
@@ -17,7 +18,8 @@ spring:
     redis:
       host: localhost
       port: 6379
-      timeout: 2000ms
+      timeout: 5000ms
+      connect-timeout: 5000ms  # Wait 5 seconds
       lettuce:
         pool:
           max-active: 20
@@ -29,6 +31,8 @@ spring:
     password: password
     hikari:
       maximum-pool-size: 10
+      connection-timeout: 30000  # Wait 30 seconds before failing
+      initialization-fail-timeout: -1  # Never give up, keep trying
 
   jpa:
     hibernate:
