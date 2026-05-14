@@ -123,7 +123,7 @@ spec:
         # Spring Boot App
         - name: app
           image: chenchenghung/ticket-system:latest  # Change this!
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           volumeMounts:
