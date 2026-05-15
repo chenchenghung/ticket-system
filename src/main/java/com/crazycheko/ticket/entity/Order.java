@@ -36,9 +36,14 @@ public class Order {
     @Enumerated(EnumType.STRING)
     private OrderStatus status;
 
+    @Column(name = "handled_by", nullable = false)
+    private String handledBy;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+
 
     public enum OrderStatus {
         SUCCESS, FAILED, CANCELLED, REFUNDED

@@ -13,6 +13,7 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.InetAddress;
 import java.time.LocalDateTime;
 
 @Slf4j
@@ -28,7 +29,10 @@ public class OrderMessageConsumer {
     public void handleOrderMessage(OrderMessage orderMessage){
         log.info("📩 收到订单消息: {}", orderMessage);
 
+
         try {
+            // 主機名稱
+            String podName = InetAddress.getLocalHost().getHostName();
             // 幂等性检查
             if (orderRepository.existsByOrderNo(orderMessage.getOrderNo())) {
                 log.warn("订单 {} 已存在，跳过处理", orderMessage.getOrderNo());
@@ -42,6 +46,7 @@ public class OrderMessageConsumer {
                     .userId(orderMessage.getUserId())
                     .quantity(orderMessage.getQuantity())
                     .status(orderMessage.getStatus())
+                    .handledBy(podName)
                     .createdAt(LocalDateTime.now())
                     .build();
 
